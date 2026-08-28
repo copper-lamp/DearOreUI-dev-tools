@@ -1,12 +1,501 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>DearOreUI Designer</title>
+        <title>DearOREUI dev tools</title>
+        <style>
+            :root {
+                --bg: #ffffff;
+                --titlebar-bg: #ffffff;
+                --panel-bg: #ffffff;
+                --panel-border: #e2e2e2;
+                --text: #1a1a1a;
+                --dim: #6a6a6a;
+                --accent: #4c9fff;
+                --ok: #3fcf8e;
+                --err: #ff6b6b;
+                --canvas-bg: #2e2e2e;
+                --screen-bg: #e8e8e8;
+                --screen-header: #4caf50;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html, body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+                font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+                /* 透明背景，让窗口 Acrylic 毛玻璃磨砂透出，标题栏区域内可见 */
+                background: transparent;
+                color: var(--text);
+            }
+
+            /* ===== 顶部标题栏（透明透出 Acrylic 毛玻璃）===== */
+            .titlebar {
+                height: 40px;
+                flex: 0 0 40px;
+                display: flex;
+                align-items: stretch;
+                padding: 0 6px;
+                background: transparent;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+                user-select: none;
+                position: relative;
+                z-index: 100;
+            }
+            .titlebar-controls {
+                display: flex;
+                align-items: stretch;
+                gap: 2px;
+                margin-left: auto;
+            }
+            .ctl-btn {
+                width: 40px;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: none;
+                background: transparent;
+                color: var(--text);
+                cursor: pointer;
+            }
+            .ctl-btn:hover {
+                background: rgba(0, 0, 0, 0.08);
+            }
+            .ctl-close:hover {
+                background: #e81123;
+                color: #fff;
+            }
+            .titlebar-brand {
+                font-size: 14px;
+                font-weight: 600;
+                margin-right: 18px;
+                align-self: center;
+                line-height: 40px;
+            }
+            .titlebar-menus {
+                display: flex;
+                align-items: center;
+                gap: 18px;
+            }
+            .titlebar-menu {
+                position: relative;
+                font-size: 13px;
+                color: var(--text);
+                cursor: pointer;
+                padding: 4px 6px;
+                border-radius: 4px;
+            }
+            .titlebar-menu:hover {
+                background: #f2f2f2;
+            }
+            .titlebar-menu > .dropdown {
+                display: none;
+                position: absolute;
+                top: 100%;
+                right: 0;
+                min-width: 160px;
+                background: #ffffff;
+                border: 1px solid var(--panel-border);
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+                padding: 4px 0;
+                z-index: 1000;
+            }
+            .titlebar-menu.open > .dropdown {
+                display: block;
+            }
+            .dropdown-item {
+                padding: 7px 14px;
+                font-size: 13px;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .dropdown-item:hover {
+                background: #f2f2f2;
+            }
+            .dropdown-sep {
+                height: 1px;
+                background: var(--panel-border);
+                margin: 4px 8px;
+            }
+
+            /* ===== 主布局 ===== */
+            .app {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+            }
+            .workspace-root {
+                flex: 1;
+                display: flex;
+                overflow: hidden;
+            }
+
+            /* ===== 左侧资源列表面板 ===== */
+            .resource-panel {
+                width: 240px;
+                flex: 0 0 240px;
+                display: flex;
+                flex-direction: column;
+                background: var(--panel-bg);
+                border-right: 1px solid var(--panel-border);
+                transition: width 0.18s ease, flex-basis 0.18s ease;
+                overflow: hidden;
+            }
+            .resource-panel.collapsed {
+                width: 36px;
+                flex-basis: 36px;
+            }
+            .resource-panel-head {
+                height: 36px;
+                flex: 0 0 36px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 10px;
+                border-bottom: 1px solid var(--panel-border);
+            }
+            .resource-panel.collapsed .resource-panel-head {
+                justify-content: center;
+                padding: 0;
+            }
+            .resource-panel-title {
+                font-size: 13px;
+                font-weight: 600;
+                white-space: nowrap;
+            }
+            .resource-panel.collapsed .resource-panel-title {
+                display: none;
+            }
+            .resource-panel-toggle {
+                width: 22px;
+                height: 22px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 1px solid var(--panel-border);
+                background: #ffffff;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                color: var(--dim);
+            }
+            .resource-panel-toggle:hover {
+                background: #f2f2f2;
+            }
+            #resource-toggle-icon {
+                transition: transform 0.15s ease;
+                display: block;
+            }
+            .resource-list {
+                flex: 1;
+                overflow: auto;
+                padding: 6px 8px;
+            }
+            .resource-panel.collapsed .resource-list {
+                display: none;
+            }
+            .resource-empty {
+                font-size: 12px;
+                color: var(--dim);
+                padding: 10px;
+                line-height: 1.5;
+            }
+            .resource-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 6px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-bottom: 2px;
+            }
+            .resource-item:hover {
+                background: rgba(0,0,0,0.06);
+            }
+            .resource-item.selected {
+                background: rgba(0,0,0,0.12);
+            }
+            .resource-item-name {
+                font-size: 13px;
+            }
+            .resource-item-path {
+                font-size: 11px;
+                color: var(--dim);
+            }
+
+            /* ===== 右侧工作区 ===== */
+            .workspace {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+                background: var(--canvas-bg);
+            }
+
+            /* 状态栏（融入深灰画布） */
+            .statusbar {
+                height: 34px;
+                flex: 0 0 34px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 14px;
+                background: var(--canvas-bg);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                font-size: 12px;
+                color: #e8e8e8;
+            }
+            .statusbar-hint {
+                color: #b8b8b8;
+            }
+
+            /* 画布：自动适配可视区，无滚动框，四周留白由 CanvasView.fit() 控制 */
+            .canvas-wrapper {
+                flex: 1;
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                background: var(--canvas-bg);
+            }
+            .canvas-wrapper.resizing {
+                cursor: nwse-resize;
+            }
+
+            /* 屏幕外框 */
+            .screen-frame {
+                width: 1920px;
+                height: 1080px;
+                background: var(--screen-bg);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+                flex: 0 0 auto;
+            }
+            /* 尺寸拖拽手柄：右边缘改宽（x）、下边缘改高（y） */
+            .resize-handle-x {
+                position: absolute;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                width: 10px;
+                cursor: ew-resize;
+                z-index: 10;
+            }
+            .resize-handle-y {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 10px;
+                cursor: ns-resize;
+                z-index: 10;
+            }
+            .screen-header {
+                height: 28px;
+                flex: 0 0 28px;
+                background: var(--screen-header);
+                display: flex;
+                align-items: center;
+                padding: 0 10px;
+                font-size: 13px;
+                color: #000;
+                font-weight: 500;
+            }
+            .screen-body {
+                flex: 1;
+                position: relative;
+                overflow: hidden;
+            }
+            .screen-body iframe {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+                background: transparent;
+            }
+            .screen-placeholder {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: var(--dim);
+                font-size: 14px;
+                text-align: center;
+            }
+
+            /* 日志抽屉 */
+            .log-drawer {
+                height: 0;
+                flex: 0 0 0;
+                display: flex;
+                flex-direction: column;
+                background: #ffffff;
+                border-top: 1px solid var(--panel-border);
+                transition: height 0.2s ease, flex-basis 0.2s ease;
+                overflow: hidden;
+            }
+            .log-drawer.open {
+                height: 200px;
+                flex-basis: 200px;
+            }
+            .log-drawer-head {
+                height: 28px;
+                flex: 0 0 28px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 12px;
+                background: #f7f7f7;
+                border-bottom: 1px solid var(--panel-border);
+                font-size: 12px;
+            }
+            .log-drawer-close {
+                cursor: pointer;
+                color: var(--dim);
+            }
+            .log-content {
+                flex: 1;
+                overflow: auto;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-family: ui-monospace, Consolas, monospace;
+                line-height: 1.5;
+            }
+            .log-line {
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+            .log-line.error { color: var(--err); }
+            .log-line.warn { color: #c9a000; }
+            .log-tag {
+                color: var(--dim);
+                margin-right: 6px;
+            }
+
+            /* 通用 */
+            .hidden {
+                display: none !important;
+            }
+        </style>
     </head>
     <body>
-        <div id="app"></div>
+        <div id="app" class="app">
+            <header class="titlebar" data-tauri-drag-region>
+                <div class="titlebar-brand" data-tauri-drag-region>DearOREUI dev tools</div>
+                <div class="titlebar-menus">
+                    <div class="titlebar-menu" id="menu-project">
+                        项目
+                        <div class="dropdown">
+                            <div class="dropdown-item" id="menu-import-vanilla">导入原版资源</div>
+                            <div class="dropdown-item" id="menu-vanilla-overlay">原版改造</div>
+                            <div class="dropdown-sep"></div>
+                            <div class="dropdown-item" id="menu-reload-assets">重新载入资产</div>
+                        </div>
+                    </div>
+                    <div class="titlebar-menu" id="menu-settings">
+                        设置
+                        <div class="dropdown">
+                            <div class="dropdown-item" id="menu-set-preview-dir">设置预览目录</div>
+                        </div>
+                    </div>
+                    <div class="titlebar-menu" id="menu-help">
+                        帮助
+                        <div class="dropdown">
+                            <div class="dropdown-item" id="menu-toggle-logs">页面日志</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="titlebar-controls">
+                    <button class="ctl-btn" id="win-min" title="最小化" aria-label="最小化"><svg viewBox="0 0 10 10" width="10" height="10"><path d="M0 5h10v1H0z" fill="currentColor"/></svg></button>
+                    <button class="ctl-btn" id="win-max" title="最大化/还原" aria-label="最大化/还原"><svg viewBox="0 0 10 10" width="10" height="10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
+                    <button class="ctl-btn ctl-close" id="win-close" title="关闭" aria-label="关闭"><svg viewBox="0 0 10 10" width="10" height="10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
+                </div>
+            </header>
+
+            <div class="workspace-root">
+                <aside class="resource-panel" id="resource-panel">
+                    <div class="resource-panel-head">
+                        <span class="resource-panel-title">资源列表</span>
+                        <button class="resource-panel-toggle" id="resource-toggle" title="折叠">
+                            <svg id="resource-toggle-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="10,3 5,8 10,13"/></svg>
+                        </button>
+                    </div>
+                    <div class="resource-list" id="resource-list">
+                        <div class="resource-empty">未载入资产。请通过“项目 &gt; 设置预览目录”指定 DearOreUI 数据目录。</div>
+                    </div>
+                </aside>
+
+                <main class="workspace">
+                    <div class="statusbar">
+                        <div id="status-screen">屏幕 1920*1080</div>
+                        <div class="statusbar-hint">拖拽屏幕右下角以调整分辨率，检查布局适配</div>
+                    </div>
+                    <div class="canvas-wrapper" id="canvas-wrapper">
+                        <div class="screen-frame" id="screen-frame">
+                            <div class="screen-header" id="screen-header">ui资源</div>
+                            <div class="screen-body" id="screen-body">
+                                <div class="screen-placeholder">请从左侧资源列表选择一个 UI 进行预览</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-drawer" id="log-drawer">
+                        <div class="log-drawer-head">
+                            <span>页面日志 / 错误</span>
+                            <span class="log-drawer-close" id="log-drawer-close">关闭</span>
+                        </div>
+                        <div class="log-content" id="log-content"></div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- 导入原版资源对话框 -->
+        <dialog id="import-dialog" style="border:1px solid var(--panel-border);border-radius:8px;padding:0;min-width:420px;background:#ffffff;">
+            <div style="padding:16px 18px;border-bottom:1px solid var(--panel-border);font-weight:600;font-size:14px;">导入原版资源</div>
+            <div style="padding:16px 18px;">
+                <div style="margin-bottom:12px;">
+                    <label style="display:block;font-size:12px;color:var(--dim);margin-bottom:4px;">游戏数据目录（指向 data/gui/dist 或 .../hbui）</label>
+                    <input id="import-source" type="text" placeholder="例如 D:/Games/Minecraft/data/gui/dist" style="width:100%;padding:7px 10px;border:1px solid var(--panel-border);border-radius:4px;font-size:13px;" />
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:12px;color:var(--dim);margin-bottom:4px;">资源版本名（可选）</label>
+                    <input id="import-version" type="text" placeholder="如 MC26.1" style="width:100%;padding:7px 10px;border:1px solid var(--panel-border);border-radius:4px;font-size:13px;" />
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button class="secondary" id="import-cancel" style="background:#eeeeee;border:1px solid var(--panel-border);color:var(--text);">取消</button>
+                    <button id="import-confirm">导入</button>
+                </div>
+                <div id="import-result" style="margin-top:12px;font-size:12.5px;line-height:1.6;white-space:pre-wrap;"></div>
+            </div>
+        </dialog>
+
+        <!-- 设置预览目录对话框 -->
+        <dialog id="settings-dialog" style="border:1px solid var(--panel-border);border-radius:8px;padding:0;min-width:420px;background:#ffffff;">
+            <div style="padding:16px 18px;border-bottom:1px solid var(--panel-border);font-weight:600;font-size:14px;">设置预览目录</div>
+            <div style="padding:16px 18px;">
+                <div style="margin-bottom:16px;">
+                    <label style="display:block;font-size:12px;color:var(--dim);margin-bottom:4px;">模组数据目录（含 preview/uiAssets.json）</label>
+                    <input id="settings-preview-dir" type="text" placeholder="DearOreUI NativeMod 数据目录" style="width:100%;padding:7px 10px;border:1px solid var(--panel-border);border-radius:4px;font-size:13px;" />
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px;">
+                    <button class="secondary" id="settings-cancel" style="background:#eeeeee;border:1px solid var(--panel-border);color:var(--text);">取消</button>
+                    <button id="settings-confirm">确定</button>
+                </div>
+            </div>
+        </dialog>
+
         <script type="module" src="/src/main.ts"></script>
     </body>
 </html>

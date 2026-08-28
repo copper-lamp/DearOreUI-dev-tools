@@ -11,13 +11,24 @@
     "app": {
         "windows": [
             {
-                "title": "DearOreUI Designer",
+                "title": "DearOREUI dev tools",
                 "width": 1280,
-                "height": 800
+                "height": 800,
+                "decorations": false
             }
         ],
         "security": {
             "csp": null
         }
+    },
+    "bundle": {
+        "active": true,
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ]
     }
 }

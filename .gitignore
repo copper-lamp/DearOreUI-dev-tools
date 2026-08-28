@@ -1,0 +1,21 @@
+# Node 依赖
+node_modules/
+
+# Rust / Cargo 构建产物
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Vite 构建输出
+dist/
+
+# 本地演示 / 临时预览资产（非交付物）
+.demo/
+
+# 生成头文件（由构建工具生成）
+src/generated/
+
+# 日志与系统文件
+*.log
+.DS_Store
+Thumbs.db
