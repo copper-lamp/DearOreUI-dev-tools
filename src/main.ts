@@ -3,6 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open } from "@tauri-apps/plugin-dialog";
 import { createCanvasView, type CanvasViewHandle } from "./preview/CanvasView";
 import { createResourcePanel, type ResourcePanelHandle } from "./preview/ResourcePanel";
 import type { PreviewTarget, MockHandlers } from "./preview/PreviewBootstraper";
@@ -33,11 +34,53 @@ interface LoadResult {
     ok: boolean;
 }
 
+interface ModScanResult {
+    targets: PreviewTarget[];
+    files: string[];
+    warnings: string[];
+    path: string;
+    ok: boolean;
+}
+
 const $ = <T extends HTMLElement>(sel: string): T => {
     const el = document.querySelector<T>(sel);
     if (!el) throw new Error(`找不到元素: ${sel}`);
     return el;
 };
+
+// ---------------------------------------------------------------------------
+// 即时反馈：toast + 当前目录显示
+// ---------------------------------------------------------------------------
+
+const toastEl = $<HTMLDivElement>("#toast");
+let toastTimer: number | undefined;
+
+function showToast(text: string, kind: "error" | "ok" | "info" = "info"): void {
+    toastEl.textContent = text;
+    toastEl.className = `toast show ${kind}`;
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+const dirWrapEl = $<HTMLDivElement>("#resource-dir");
+const dirPathEl = $<HTMLSpanElement>("#resource-dir-path");
+
+function updateDirDisplay(dir: string): void {
+    if (!dir) {
+        dirWrapEl.classList.add("hidden");
+        return;
+    }
+    dirPathEl.textContent = dir;
+    dirWrapEl.classList.remove("hidden");
+}
+
+/** 把 tauri invoke 的报错简化为去前缀的可读信息。 */
+function friendlyErr(e: unknown): string {
+    const s = String(e);
+    const m = s.match(/(?:failed|Error)[:\s]+([\s\S]*)$/i);
+    const detail = m ? m[1].trim() : "";
+    return detail || s;
+}
 
 const escapeHtml = (s: string): string =>
     s
@@ -113,9 +156,11 @@ let previewDir = localStorage.getItem("dearoreui.previewDir") || "";
 
 async function loadAssets(dir: string): Promise<void> {
     if (!dir) {
-        plotLog("error", "请先设置预览目录（项目 > 设置预览目录）");
+        showToast("请先选择模组目录（项目 > 打开模组目录…）", "error");
+        plotLog("error", "请先设置预览目录（项目 > 打开模组目录）");
         return;
     }
+    updateDirDisplay(dir);
     try {
         const r = await invoke<LoadResult>("load_ui_assets", { dirOrFile: dir });
         currentTargets = r.targets;
@@ -123,9 +168,14 @@ async function loadAssets(dir: string): Promise<void> {
         plotLog("info", `载入 ${currentTargets.length} 个资源（来源 ${r.path}）`);
         if (currentTargets.length > 0) {
             resourcePanel.select(currentTargets[0].entry);
+            showToast(`已载入 ${currentTargets.length} 个 UI（${dir}）`, "ok");
+        } else {
+            showToast("该目录下没有可预览的 UI 资产（preview/uiAssets.json 为空），请检查导出是否生成。", "error");
         }
     } catch (e) {
-        plotLog("error", `载入资产失败：${String(e)}`);
+        const msg = friendlyErr(e);
+        plotLog("error", `载入资产失败：${msg}`);
+        showToast(`载入资产失败：${msg}`, "error");
     }
 }
 
@@ -147,6 +197,56 @@ document.querySelectorAll(".titlebar-menu").forEach((menu) => {
 });
 
 window.addEventListener("click", closeAllMenus);
+
+// 项目 > 打开模组目录（系统文件夹选择器）→ 自动载入预览
+$<HTMLDivElement>("#menu-open-project").addEventListener("click", async () => {
+    try {
+        const sel = await open({
+            directory: true,
+            multiple: false,
+            title: "请选择模组目录（含 preview/uiAssets.json）",
+        });
+        if (typeof sel !== "string" || !sel) return; // 用户取消
+        previewDir = sel;
+        localStorage.setItem("dearoreui.previewDir", sel);
+        settingsInput.value = sel;
+        plotLog("info", `已选择模组目录：${sel}`);
+        void loadAssets(sel);
+    } catch (e) {
+        plotLog("error", `选择目录失败：${String(e)}`);
+    }
+});
+
+// 项目 > 识别模组 UI（源码扫描，自动识别、模组零改动）
+$<HTMLDivElement>("#menu-open-mod-source").addEventListener("click", async () => {
+    try {
+        const sel = await open({
+            directory: true,
+            multiple: false,
+            title: "选择模组源码目录（将自动识别其中的 UI）",
+        });
+        if (typeof sel !== "string" || !sel) return; // 用户取消
+        updateDirDisplay(sel);
+        plotLog("info", `正在扫描模组目录：${sel}`);
+        const r = await invoke<ModScanResult>("scan_mod_ui", { dir: sel });
+        currentTargets = r.targets;
+        resourcePanel.setTargets(currentTargets);
+        if (r.targets.length > 0) {
+            resourcePanel.select(r.targets[0].entry);
+            showToast(`自动识别到 ${r.targets.length} 个 UI（来源 ${r.files.length} 个源文件）`, "ok");
+        } else {
+            showToast("未识别到 UI：请确认为 DearOreUI 模组源码目录（含 registerComponent 注册）。", "error");
+        }
+        if (r.warnings.length > 0) {
+            plotLog("warn", `扫描告警：${r.warnings.join("；")}`);
+        }
+        plotLog("info", `扫描完成：${r.files.length} 个源文件，识别 ${r.targets.length} 个 UI`);
+    } catch (e) {
+        const msg = friendlyErr(e);
+        plotLog("error", `扫描模组失败：${msg}`);
+        showToast(`扫描模组失败：${msg}`, "error");
+    }
+});
 
 // 项目 > 导入原版资源
 const importDialog = $<HTMLDialogElement>("#import-dialog");

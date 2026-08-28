@@ -1,3 +1,4 @@
+mod mod_scanner;
 mod preview_assets;
 mod vanilla_import;
 
@@ -17,10 +18,12 @@ pub fn run() {
             }
             Ok(())
         })
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             vanilla_import::import_vanilla,
             vanilla_import::list_vanilla_screens,
-            preview_assets::load_ui_assets
+            preview_assets::load_ui_assets,
+            mod_scanner::scan_mod_ui
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

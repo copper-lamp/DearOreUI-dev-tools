@@ -47,8 +47,12 @@ export function assemblePreviewDocument(target: PreviewTarget, handlers: MockHan
     const stage7 = stage7BootstrapRaw.split("__DEAROREUI_CTX__").join(String(contextId));
 
     // 把 mock handlers 以字面量方式塞进 __PreviewMock__.handlers。
+    // 注意：装配脚本#5 里唯一可用的绑定是 `mock`（== window.__PreviewMock__），并没有
+    // 名为 `handlers` 的变量；直接写 `handlers[...]` 会抛 ReferenceError，导致挂载脚本
+    // 在定义 bootOnce 之前就中止、没有任何内容渲染。改写到 mock.handlers 上（与 shim 的
+    // __PreviewMock__.call 读取 this.handlers 对齐）。
     const handlerList = Object.entries(handlers)
-        .map(([m, fn]) => `handlers[${JSON.stringify(m)}] = (${fn.toString()});`)
+        .map(([m, fn]) => `mock.handlers[${JSON.stringify(m)}] = (${fn.toString()});`)
         .join("\n        ");
 
     const doc = `<!doctype html>
