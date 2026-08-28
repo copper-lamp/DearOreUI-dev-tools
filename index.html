@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>DearOREUI dev tools</title>
+        <title>ORE dev tools</title>
         <style>
             :root {
                 --bg: #ffffff;
@@ -76,6 +76,15 @@
                 margin-right: 18px;
                 align-self: center;
                 line-height: 40px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .titlebar-logo {
+                width: 18px;
+                height: 20px;
+                object-fit: contain;
+                pointer-events: none;
             }
             .titlebar-menus {
                 display: flex;
@@ -433,13 +442,15 @@
     <body>
         <div id="app" class="app">
             <header class="titlebar" data-tauri-drag-region>
-                <div class="titlebar-brand" data-tauri-drag-region>DearOREUI dev tools</div>
+                <div class="titlebar-brand" data-tauri-drag-region>
+                    <img class="titlebar-logo" src="/icon_s.png" alt="" draggable="false" />
+                    <span data-tauri-drag-region>ORE dev tools</span>
+                </div>
                 <div class="titlebar-menus">
                     <div class="titlebar-menu" id="menu-project">
                         项目
                         <div class="dropdown">
                             <div class="dropdown-item" id="menu-open-project">打开模组目录…</div>
-                            <div class="dropdown-item" id="menu-open-mod-source">识别模组 UI（源码扫描）…</div>
                             <div class="dropdown-sep"></div>
                             <div class="dropdown-item" id="menu-import-vanilla">导入原版资源</div>
                             <div class="dropdown-item" id="menu-vanilla-overlay">原版改造</div>

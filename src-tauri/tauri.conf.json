@@ -1,5 +1,5 @@
 {
-    "productName": "DearOreUI Designer",
+    "productName": "ORE dev tools",
     "version": "0.1.0",
     "identifier": "com.dearoreui.designer",
     "build": {
@@ -11,7 +11,7 @@
     "app": {
         "windows": [
             {
-                "title": "DearOREUI dev tools",
+                "title": "ORE dev tools",
                 "width": 1280,
                 "height": 800,
                 "decorations": false

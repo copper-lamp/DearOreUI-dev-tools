@@ -1,7 +1,8 @@
-// DearOREUI dev tools 前端入口
+// ORE dev tools 前端入口
 // 新布局：顶部菜单 + 左侧资源列表面板 + 右侧画布预览
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { createCanvasView, type CanvasViewHandle } from "./preview/CanvasView";
@@ -25,12 +26,6 @@ interface ImportResult {
     screen_ids: string[];
     total_bytes: number;
     errors: string[];
-    ok: boolean;
-}
-
-interface LoadResult {
-    targets: PreviewTarget[];
-    path: string;
     ok: boolean;
 }
 
@@ -154,28 +149,58 @@ const canvasView: CanvasViewHandle = createCanvasView(
 let currentTargets: PreviewTarget[] = [];
 let previewDir = localStorage.getItem("dearoreui.previewDir") || "";
 
-async function loadAssets(dir: string): Promise<void> {
+/** 记录当前选择并让 Rust 监听该目录的源码改动（*.h/*.cpp 等）。 */
+async function relayWatch(dir: string): Promise<void> {
+    try {
+        await invoke("stop_watch");
+        await invoke("start_watch", { dir });
+    } catch (e) {
+        plotLog("warn", `文件监听启动失败（仍可手动刷新）：${friendlyErr(e)}`);
+    }
+}
+
+/**
+ * 统一加载入口：选择目录 / 刷新按钮 / 文件改动自动刷新 都走这里。
+ * 打开目录即自动识别模组 UI（源码静态扫描，模组零改动）。
+ */
+async function loadProject(dir: string): Promise<void> {
     if (!dir) {
         showToast("请先选择模组目录（项目 > 打开模组目录…）", "error");
         plotLog("error", "请先设置预览目录（项目 > 打开模组目录）");
         return;
     }
+    previewDir = dir;
+    localStorage.setItem("dearoreui.previewDir", dir);
+    settingsInput.value = dir;
     updateDirDisplay(dir);
+
+    // 保留当前选中，便于自动刷新后仍聚焦原预览。
+    const prevSelected = resourcePanel.getSelected()?.entry ?? null;
+
     try {
-        const r = await invoke<LoadResult>("load_ui_assets", { dirOrFile: dir });
+        const r = await invoke<ModScanResult>("scan_mod_ui", { dir });
         currentTargets = r.targets;
         resourcePanel.setTargets(currentTargets);
-        plotLog("info", `载入 ${currentTargets.length} 个资源（来源 ${r.path}）`);
+        await relayWatch(dir);
+
         if (currentTargets.length > 0) {
-            resourcePanel.select(currentTargets[0].entry);
-            showToast(`已载入 ${currentTargets.length} 个 UI（${dir}）`, "ok");
+            if (prevSelected && currentTargets.some((t) => t.entry === prevSelected)) {
+                resourcePanel.select(prevSelected);
+            } else {
+                resourcePanel.select(currentTargets[0].entry);
+            }
+            showToast(`已识别 ${currentTargets.length} 个 UI（${dir}）`, "ok");
         } else {
-            showToast("该目录下没有可预览的 UI 资产（preview/uiAssets.json 为空），请检查导出是否生成。", "error");
+            showToast("未识别到 UI：请确认为 DearOreUI 模组源码目录（含 registerComponent 注册）。", "error");
         }
+        if (r.warnings.length > 0) {
+            plotLog("warn", `扫描告警：${r.warnings.join("；")}`);
+        }
+        plotLog("info", `扫描 ${r.files.length} 个源文件，识别 ${r.targets.length} 个 UI（${dir}）`);
     } catch (e) {
         const msg = friendlyErr(e);
-        plotLog("error", `载入资产失败：${msg}`);
-        showToast(`载入资产失败：${msg}`, "error");
+        plotLog("error", `载入/扫描失败：${msg}`);
+        showToast(`载入/扫描失败：${msg}`, "error");
     }
 }
 
@@ -198,53 +223,19 @@ document.querySelectorAll(".titlebar-menu").forEach((menu) => {
 
 window.addEventListener("click", closeAllMenus);
 
-// 项目 > 打开模组目录（系统文件夹选择器）→ 自动载入预览
+// 项目 > 打开模组目录（系统文件夹选择器）→ 自动识别并监听
 $<HTMLDivElement>("#menu-open-project").addEventListener("click", async () => {
     try {
         const sel = await open({
             directory: true,
             multiple: false,
-            title: "请选择模组目录（含 preview/uiAssets.json）",
+            title: "请选择模组目录（将自动识别其中的 UI）",
         });
         if (typeof sel !== "string" || !sel) return; // 用户取消
-        previewDir = sel;
-        localStorage.setItem("dearoreui.previewDir", sel);
-        settingsInput.value = sel;
         plotLog("info", `已选择模组目录：${sel}`);
-        void loadAssets(sel);
+        void loadProject(sel);
     } catch (e) {
         plotLog("error", `选择目录失败：${String(e)}`);
-    }
-});
-
-// 项目 > 识别模组 UI（源码扫描，自动识别、模组零改动）
-$<HTMLDivElement>("#menu-open-mod-source").addEventListener("click", async () => {
-    try {
-        const sel = await open({
-            directory: true,
-            multiple: false,
-            title: "选择模组源码目录（将自动识别其中的 UI）",
-        });
-        if (typeof sel !== "string" || !sel) return; // 用户取消
-        updateDirDisplay(sel);
-        plotLog("info", `正在扫描模组目录：${sel}`);
-        const r = await invoke<ModScanResult>("scan_mod_ui", { dir: sel });
-        currentTargets = r.targets;
-        resourcePanel.setTargets(currentTargets);
-        if (r.targets.length > 0) {
-            resourcePanel.select(r.targets[0].entry);
-            showToast(`自动识别到 ${r.targets.length} 个 UI（来源 ${r.files.length} 个源文件）`, "ok");
-        } else {
-            showToast("未识别到 UI：请确认为 DearOreUI 模组源码目录（含 registerComponent 注册）。", "error");
-        }
-        if (r.warnings.length > 0) {
-            plotLog("warn", `扫描告警：${r.warnings.join("；")}`);
-        }
-        plotLog("info", `扫描完成：${r.files.length} 个源文件，识别 ${r.targets.length} 个 UI`);
-    } catch (e) {
-        const msg = friendlyErr(e);
-        plotLog("error", `扫描模组失败：${msg}`);
-        showToast(`扫描模组失败：${msg}`, "error");
     }
 });
 
@@ -288,9 +279,14 @@ $<HTMLDivElement>("#menu-vanilla-overlay").addEventListener("click", () => {
     plotLog("info", "原版改造功能将在后续里程碑实现完整 vanilla 屏幕基底装载。");
 });
 
-// 项目 > 重新载入资产
+// 项目 > 重新载入资产（刷新按钮）
 $<HTMLDivElement>("#menu-reload-assets").addEventListener("click", () => {
-    void loadAssets(previewDir);
+    if (!previewDir) {
+        showToast("请先打开模组目录", "error");
+        return;
+    }
+    plotLog("info", "手动刷新…");
+    void loadProject(previewDir);
 });
 
 // 设置 > 设置预览目录
@@ -304,12 +300,10 @@ $<HTMLButtonElement>("#settings-cancel").addEventListener("click", () => {
     settingsDialog.close();
 });
 $<HTMLButtonElement>("#settings-confirm").addEventListener("click", () => {
-    previewDir = settingsInput.value.trim();
-    if (previewDir) {
-        localStorage.setItem("dearoreui.previewDir", previewDir);
-        void loadAssets(previewDir);
-    }
+    const dir = settingsInput.value.trim();
     settingsDialog.close();
+    if (!dir) return;
+    void loadProject(dir);
 });
 
 // 帮助 > 页面日志
@@ -341,7 +335,7 @@ resourceToggle.addEventListener("click", () => {
 // 入口
 // ---------------------------------------------------------------------------
 
-plotLog("info", "DearOREUI dev tools 已就绪");
+plotLog("info", "ORE dev tools 已就绪");
 
 // ---------------------------------------------------------------------------
 // 自定义标题栏：最小化 / 最大化还原 / 关闭 + 空白区拖拽移动窗口
@@ -377,7 +371,20 @@ document.addEventListener("mousedown", (ev) => {
     runWinAction(() => appWindow.startDragging());
 });
 
+// ---------------------------------------------------------------------------
+// 文件改动自动刷新（近似 Web 开发 HMR）
+// ---------------------------------------------------------------------------
+let reloadTimer: number | undefined;
+void listen("mod-source-changed", () => {
+    if (!previewDir) return;
+    if (reloadTimer) window.clearTimeout(reloadTimer);
+    reloadTimer = window.setTimeout(() => {
+        plotLog("info", "检测到源码改动，自动刷新…");
+        void loadProject(previewDir);
+    }, 400);
+});
+
 if (previewDir) {
     settingsInput.value = previewDir;
-    void loadAssets(previewDir);
+    void loadProject(previewDir);
 }
