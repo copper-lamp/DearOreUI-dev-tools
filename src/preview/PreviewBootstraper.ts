@@ -8,13 +8,14 @@
 //   4) 解析 domScript → spec.body，挂载到 containerId
 //   5) 挂载后执行 pageScript（页面逻辑；用 try/catch 兜内置错误进 consoleBridge）
 //
-// 真机与预览**同源**：运行时/bootstrap 资产从核心侧 DearOreUI/assets 内联读取，
-// DOM/页面脚本取自已导出的 uiAssets.json（同一份）。
+// 真机与预览**同源**：运行时/bootstrap 资产以内置副本（src/runtime-assets）读取，
+// 副本由 scripts/sync_runtime_assets.mjs 从核心侧 DearOreUI/assets 同步而来。
+// 独立仓库发布时依赖副本，避免跨仓越级导入。
 
 import { shimSource, postStage5PatchSource } from "./OreuiCompatShim";
-// 与真机共用同一份资产文件（M1 资产化的产物），见 vite-env.d.ts 的 *?raw 声明。
-import stage5RuntimeRaw from "../../../DearOreUI/assets/stage5-runtime.js?raw";
-import stage7BootstrapRaw from "../../../DearOreUI/assets/stage7-ui-bootstrap.js?raw";
+// ?raw 内联导入，见 vite-env.d.ts 的 *?raw 声明。
+import stage5RuntimeRaw from "../runtime-assets/stage5-runtime.js?raw";
+import stage7BootstrapRaw from "../runtime-assets/stage7-ui-bootstrap.js?raw";
 
 export interface PreviewTarget {
     entry: string;
