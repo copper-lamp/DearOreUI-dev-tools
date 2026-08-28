@@ -47,6 +47,59 @@ export function createCanvasView(
 
     const hostedFrame: HostedFrame = createPreviewHost(iframe, logEmitter);
 
+    // ===== 常用分辨率快捷下拉 =====
+    // 值格式 "WxH";"custom" 一项用于表示"当前分辨率不在预设列表"。
+    const PRESETS: Array<[number, number]> = [
+        [3840, 2160],
+        [2560, 1440],
+        [1920, 1080],
+        [1600, 900],
+        [1366, 768],
+        [1280, 720],
+        [1024, 768],
+        [960, 540],
+        [720, 1280],
+        [1080, 1920],
+        [480, 854],
+        [360, 800],
+    ];
+    const select = document.createElement("select");
+    select.className = "resize-preset";
+    select.title = "快捷选择常用分辨率";
+    for (const [pw, ph] of PRESETS) {
+        const o = document.createElement("option");
+        o.value = `${pw}x${ph}`;
+        o.textContent = `${pw} × ${ph}`;
+        select.appendChild(o);
+    }
+    const customOpt = document.createElement("option");
+    customOpt.value = "custom";
+    select.appendChild(customOpt);
+    // 挂到状态栏、"屏幕 1920*1080"文本的右侧。
+    statusScreen.parentElement?.insertBefore(select, statusScreen.nextSibling);
+
+    /** 让下拉始终反映当前分辨率；当前不在预设时选中并刷新"自定义"项标签。 */
+    function updateSelect(): void {
+        const key = `${w}x${h}`;
+        for (const o of select.options) {
+            if (o.value === key) {
+                select.value = key;
+                return;
+            }
+        }
+        const c = select.querySelector<HTMLOptionElement>('option[value="custom"]');
+        if (c) c.textContent = `${w} × ${h}`;
+        select.value = "custom";
+    }
+
+    select.addEventListener("change", () => {
+        const v = select.value;
+        if (v === "custom") return;
+        const idx = v.indexOf("x");
+        if (idx <= 0) return;
+        setSize(Number(v.slice(0, idx)), Number(v.slice(idx + 1)));
+    });
+
     /** 自动适配可视区：等比缩放使整块屏幕完整显示，四周留 PAD 空白，无滚动框。 */
     function fit(): void {
         const vw = wrapper.clientWidth;
@@ -64,12 +117,20 @@ export function createCanvasView(
         frame.style.width = w + "px";
         frame.style.height = h + "px";
         if (updateStatus) statusScreen.textContent = `屏幕 ${w}*${h}`;
+        updateSelect();
         fit();
     }
 
     // 预览屏幕尺寸改为 x / y 单独拖拽：
     // - 右边缘手柄（ew-resize）只改宽度
     // - 下边缘手柄（ns-resize）只改高度
+    //
+    // 拖拽性能策略（不跟手 / 卡顿的修复）：
+    // 1. 拖拽期间固定 dragScale：换算用「拖拽开始时的 scale」，避免 scale 随尺寸实时
+    //    变化造成非线性换算，保证手柄线性跟手。
+    // 2. mousemove 经 requestAnimationFrame 合并，每帧最多写一次 DOM。
+    // 3. 拖拽中**不反复 fit()**（不同步重算 transform / 重排），仅 mouseup 时收敛一次；
+    //    这样拖拽期间只改 frame 的宽高、iframe 预览保持上一次分辨率，显著降低重排成本。
     const handleX = document.createElement("div");
     handleX.className = "resize-handle-x";
     handleX.title = "横向拖拽调整宽度";
@@ -81,38 +142,112 @@ export function createCanvasView(
     frame.appendChild(handleY);
 
     let dragging: "x" | "y" | null = null;
-    let startX = 0;
-    let startY = 0;
+    let startPX = 0;
+    let startPY = 0;
     let startW = DEFAULT_W;
     let startH = DEFAULT_H;
+    let dragScale = 1;
+    let rafPending = false;
+    let pendingCX = 0;
+    let pendingCY = 0;
+    // 锁定态：拖拽时用 Pointer Lock 钉住物理指针，靠相对位移累计驱动尺寸，
+    // 指针不会跑到预览 iframe / 窗口外导致拖拽中断。
+    let locked = false;
+    let accX = 0;
+    let accY = 0;
 
     const beginDrag = (axis: "x" | "y", ev: MouseEvent): void => {
         ev.preventDefault();
         ev.stopPropagation();
         dragging = axis;
-        startX = ev.clientX;
-        startY = ev.clientY;
+        startPX = ev.clientX;
+        startPY = ev.clientY;
         startW = w;
         startH = h;
+        dragScale = scale; // 拖引用开始时的缩放，保证线性跟手
+        accX = 0;
+        accY = 0;
+        // 拖拽期间禁用 iframe 指针接收，指针即使经过预览区域也不中断。
+        iframe.style.pointerEvents = "none";
         wrapper.classList.add("resizing");
+        // 尝试锁定指针（mousedown 为合法用户手势）。
+        locked = false;
+        const el = wrapper as HTMLElement & { requestPointerLock?: () => void };
+        if (typeof el.requestPointerLock === "function") {
+            try {
+                el.requestPointerLock();
+                locked = true;
+            } catch {
+                locked = false;
+            }
+        }
     };
 
     handleX.addEventListener("mousedown", (ev) => beginDrag("x", ev));
     handleY.addEventListener("mousedown", (ev) => beginDrag("y", ev));
 
+    function flushDrag(): void {
+        rafPending = false;
+        if (!dragging) return;
+        if (locked) {
+            // 锁定态：相对位移累计 → 逻辑像素。
+            if (dragging === "x") {
+                w = clamp(Math.round(startW + accX / dragScale), MIN_W, MAX_W);
+            } else {
+                h = clamp(Math.round(startH + accY / dragScale), MIN_H, MAX_H);
+            }
+        } else {
+            // 非锁定回退：绝对坐标差 → 逻辑像素。
+            if (dragging === "x") {
+                w = clamp(Math.round(startW + (pendingCX - startPX) / dragScale), MIN_W, MAX_W);
+            } else {
+                h = clamp(Math.round(startH + (pendingCY - startPY) / dragScale), MIN_H, MAX_H);
+            }
+        }
+        frame.style.width = w + "px";
+        frame.style.height = h + "px";
+        statusScreen.textContent = `屏幕 ${w}*${h}`;
+    }
+
     window.addEventListener("mousemove", (ev) => {
         if (!dragging) return;
-        // 屏幕被 scale 缩放，物理拖拽距离需除以 scale 换算为逻辑像素
-        if (dragging === "x") {
-            setSize(startW + (ev.clientX - startX) / scale, h);
+        if (locked) {
+            accX += ev.movementX;
+            accY += ev.movementY;
         } else {
-            setSize(w, startH + (ev.clientY - startY) / scale);
+            pendingCX = ev.clientX;
+            pendingCY = ev.clientY;
         }
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(flushDrag);
     });
 
-    window.addEventListener("mouseup", () => {
+    function endDrag(): void {
+        if (!dragging) return;
         dragging = null;
         wrapper.classList.remove("resizing");
+        iframe.style.pointerEvents = "";
+        if (locked) {
+            locked = false;
+            if (document.exitPointerLock) document.exitPointerLock();
+        }
+        // 收敛：一次 fit 重排预览到新分辨率。
+        fit();
+        updateSelect();
+        statusScreen.textContent = `屏幕 ${w}*${h}`;
+    }
+
+    window.addEventListener("mouseup", endDrag);
+    // 锁定被外部打断（如按 Esc）且仍处于拖拽 → 中止并收敛。
+    document.addEventListener("pointerlockchange", () => {
+        if (locked && document.pointerLockElement !== wrapper && dragging) {
+            locked = false;
+            endDrag();
+        }
+    });
+    document.addEventListener("pointerlockerror", () => {
+        locked = false; // 锁定请求失败，回退到绝对坐标模式。
     });
 
     window.addEventListener("resize", fit);
