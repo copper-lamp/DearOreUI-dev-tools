@@ -65,6 +65,8 @@ jobs:
 
       - name: Publish GitHub Release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${{ inputs.release_tag }}" >/dev/null 2>&1; then
             gh release upload "${{ inputs.release_tag }}" release/* --clobber
