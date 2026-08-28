@@ -25,15 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # ----- 工具链：Node + pnpm + Rust（用于 Tauri 打包） -----
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
+      # ----- 工具链：Node（npm）+ Rust（用于 Tauri 打包） -----
       - uses: actions/setup-node@v6
         with:
           node-version: 20
-          cache: pnpm
+          cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -44,11 +40,11 @@ jobs:
           workspaces: src-tauri
 
       - name: Install frontend deps
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       # beforeBuildCommand 由 tauri.conf.json 提供（npm run build），此处只触发打包
       - name: Build win64 installers
-        run: pnpm tauri build --target x86_64-pc-windows-msvc
+        run: npm run tauri build -- --target x86_64-pc-windows-msvc
 
       - name: Collect installers
         shell: bash
