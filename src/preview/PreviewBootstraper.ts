@@ -16,6 +16,8 @@ import { shimSource, postStage5PatchSource } from "./OreuiCompatShim";
 // ?raw 内联导入，见 vite-env.d.ts 的 *?raw 声明。
 import stage5RuntimeRaw from "../runtime-assets/stage5-runtime.js?raw";
 import stage7BootstrapRaw from "../runtime-assets/stage7-ui-bootstrap.js?raw";
+// 预览布局接管（真 Yoga，见 Docs/DearOreUI-App布局引擎Yoga对齐-需求架构执行.md）
+import yogaLayoutPassRaw from "../runtime-assets/yoga-layout-pass.js?raw";
 
 export interface PreviewTarget {
     entry: string;
@@ -129,6 +131,10 @@ ${stage7}
         window.setTimeout(function() { window.clearInterval(iv); }, 15000);
     }
 })();
+</script>
+<script>
+    // 挂载后接管布局：父页面注入的真 Yoga 引擎（yoga-layout-pass.js）。
+    ${yogaLayoutPassRaw}
 </script>
 </body>
 </html>`;

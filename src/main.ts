@@ -7,6 +7,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { createCanvasView, type CanvasViewHandle } from "./preview/CanvasView";
 import { createResourcePanel, type ResourcePanelHandle } from "./preview/ResourcePanel";
+import { installYogaEngine } from "./preview/YogaEngine";
 import type { PreviewTarget, MockHandlers } from "./preview/PreviewBootstraper";
 import { Emitter, type BridgeLog } from "./preview/consoleBridge";
 
@@ -336,6 +337,10 @@ resourceToggle.addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 plotLog("info", "ORE dev tools 已就绪");
+
+// 预装真 Yoga 布局引擎桥：预览 iframe 同源经 window.parent.__PreviewYoga__ 调用，
+// 用与游戏同语义的引擎计算几何，替代 Chromium 布局（见 YogaEngine.ts）。
+installYogaEngine();
 
 // ---------------------------------------------------------------------------
 // 自定义标题栏：最小化 / 最大化还原 / 关闭 + 空白区拖拽移动窗口

@@ -574,6 +574,9 @@ fn component_panel_style(style: &str) -> String {
 }
 
 /// 单个 ComponentKind → stage7 节点字符串；children 已递归展开。
+/// 字段与核心层 `ComponentSpec` 对齐（kind/label/variant/style/orientation/
+/// columns/icon/src/value/state），由 `build_node_js` 从声明式字段提取后透传。
+#[allow(clippy::too_many_arguments)]
 fn kind_to_node_js(
     kind: &str,
     label: &str,
@@ -581,6 +584,10 @@ fn kind_to_node_js(
     style: &str,
     orientation: &str,
     cols: u32,
+    icon: &str,
+    src: &str,
+    value: &str,
+    state: &str,
     children: &[String],
 ) -> String {
     match kind {
@@ -636,6 +643,204 @@ fn kind_to_node_js(
             let backdrop = node_js_str("div", "", "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);", label, children);
             node_js_str("div", "", "display:flex;align-items:center;justify-content:center;", "", &[backdrop])
         }
+        // ---- A 原子：TabBar / Tooltip / ContainerSlot / KeyIcon / Bubble / FilterBar / Progress ----
+        "TabBar" => node_js_str("div", "", "display:flex;align-items:center;gap:0.4rem;", "", children),
+        "Tooltip" => {
+            node_js_str("div", "", "background:rgba(20,20,20,0.95);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:0.8rem 1.2rem;color:#fff;box-sizing:border-box;", label, children)
+        }
+        "ContainerSlot" => {
+            let mut kids: Vec<String> = Vec::new();
+            kids.extend_from_slice(children);
+            if !label.is_empty() {
+                kids.push(node_js_str(
+                    "div",
+                    "",
+                    "position:absolute;right:0.2rem;bottom:0.2rem;color:#fff;font-size:0.7rem;text-shadow:0.1rem 0.1rem 0 rgba(0,0,0,0.4);",
+                    label,
+                    &[],
+                ));
+            }
+            node_js_str(
+                "div",
+                "",
+                "position:relative;width:3.8rem;height:3.8rem;box-sizing:border-box;border:1px solid rgba(255,255,255,0.25);border-radius:4px;background:rgba(0,0,0,0.5);",
+                "",
+                &kids,
+            )
+        }
+        "KeyIcon" => {
+            node_js_str(
+                "div",
+                "",
+                "display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.4);border-radius:4px;padding:1rem 0.8rem 1.2rem;box-sizing:border-box;",
+                label,
+                children,
+            )
+        }
+        "Bubble" => {
+            node_js_str(
+                "div",
+                "",
+                "display:flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(255,255,255,0.12);padding:0.8rem 1.2rem;color:#fff;box-sizing:border-box;",
+                label,
+                children,
+            )
+        }
+        "FilterBar" => {
+            node_js_str(
+                "div",
+                "",
+                "display:flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(255,255,255,0.1);padding:0.4rem 0.8rem;color:#fff;font-size:0.9rem;box-sizing:border-box;",
+                label,
+                children,
+            )
+        }
+        "Progress" => {
+            let bg = node_js_str("div", "", "position:absolute;inset:0;border-radius:4px;background:rgba(255,255,255,0.08);", "", &[]);
+            let fill = if variant == "linear" {
+                node_js_str("div", "", "position:absolute;inset:0;width:40%;border-radius:4px;background:rgba(255,120,60,0.8);", "", &[])
+            } else {
+                node_js_str("div", "", "position:absolute;inset:0;width:40%;border-radius:50%;background:rgba(255,150,60,0.85);", "", &[])
+            };
+            let size = if variant == "linear" { "width:3.8rem;height:3.8rem;" } else { "width:2.6rem;height:2.6rem;" };
+            node_js_str("div", "", &format!("position:relative;{size}"), "", &[bg, fill])
+        }
+        // ---- B 组合：Menu / ScrollingList / Dropdown+Picker / Form / NavigationBar / Toast / SearchField / Toggle ----
+        "Menu" => {
+            node_js_str("div", "", "display:flex;flex-direction:column;min-width:16rem;background:rgba(0,0,0,0.7);padding:0.8rem;box-sizing:border-box;", "", children)
+        }
+        "ScrollingList" => {
+            node_js_str("div", "", "display:flex;flex-direction:column;height:100%;overflow-y:auto;", "", children)
+        }
+        "Dropdown" | "Picker" => {
+            let trigger = node_js_str(
+                "div",
+                "",
+                "display:flex;align-items:center;gap:0.6rem;padding:0.8rem 1.6rem;cursor:pointer;border:1px solid rgba(255,255,255,0.3);border-radius:4px;color:#fff;box-sizing:border-box;",
+                label,
+                &[],
+            );
+            let mut kids = vec![trigger];
+            if !children.is_empty() {
+                kids.push(node_js_str(
+                    "div",
+                    "",
+                    "position:absolute;top:100%;left:0;margin-top:0.4rem;display:flex;flex-direction:column;min-width:100%;background:rgba(0,0,0,0.7);padding:0.4rem;box-sizing:border-box;z-index:10;",
+                    "",
+                    children,
+                ));
+            }
+            node_js_str("div", "", "display:flex;position:relative;", "", &kids)
+        }
+        "Form" => {
+            node_js_str("div", "", "display:flex;flex-direction:column;gap:0.6rem;padding:1.6rem;box-sizing:border-box;background:rgba(0,0,0,0.7);", label, children)
+        }
+        "NavigationBar" => {
+            node_js_str("div", "", "display:flex;align-items:center;gap:1rem;padding:0.8rem 1.6rem;box-sizing:border-box;", label, children)
+        }
+        "Toast" => {
+            node_js_str("div", "", "display:flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(0,0,0,0.85);padding:0.8rem 1.2rem;color:#fff;box-sizing:border-box;", label, children)
+        }
+        "SearchField" => {
+            let field = node_js_str("input", "", "flex:1;background:transparent;border:none;outline:none;color:#fff;padding:0.8rem 0;box-sizing:border-box;", "", &[]);
+            let glyph = node_js_str("div", "", "width:1.2rem;height:1.2rem;display:flex;align-items:center;justify-content:center;color:#aaa;", "◎", &[]);
+            node_js_str("div", "", "display:flex;align-items:center;gap:0.6rem;background:#1e1e1f;padding:0 1rem;box-sizing:border-box;", "", &[field, glyph])
+        }
+        "Toggle" => {
+            let on = state == "on" || state == "checked";
+            let glyph = if on { "☑" } else { "☐" };
+            let mut kids: Vec<String> = Vec::new();
+            kids.push(node_js_str("div", "", "width:1.2rem;height:1.2rem;display:flex;align-items:center;justify-content:center;color:#fff;", glyph, &[]));
+            if !label.is_empty() {
+                kids.push(node_js_str("div", "", "color:#fff;", label, &[]));
+            }
+            node_js_str(
+                "div",
+                "",
+                "display:flex;align-items:center;gap:0.6rem;padding:0.6rem 1.2rem;border:1px solid rgba(255,255,255,0.3);border-radius:4px;box-sizing:border-box;",
+                "",
+                &kids,
+            )
+        }
+        // ---- N 导航：Breadcrumb / Pager ----
+        "Breadcrumb" => {
+            let mut kids: Vec<String> = Vec::new();
+            for (idx, c) in children.iter().enumerate() {
+                if idx > 0 {
+                    kids.push(node_js_str("div", "", "color:#999;", "/", &[]));
+                }
+                kids.push(c.clone());
+            }
+            node_js_str("div", "", "display:flex;align-items:center;gap:0.6rem;", "", &kids)
+        }
+        "Pager" => {
+            let count = if cols == 0 { 1 } else { cols };
+            let mut dots: Vec<String> = Vec::new();
+            for i in 0..count {
+                let active = value == &i.to_string();
+                let dot_css = if active { "background:#3a7bd5;" } else { "background:#999;" };
+                dots.push(node_js_str("div", "", &format!("{dot_css}width:1rem;height:1rem;border-radius:50%;"), "", &[]));
+            }
+            node_js_str("div", "", "display:flex;align-items:center;gap:0.4rem;", "", &dots)
+        }
+        // ---- I 交互：TextArea / Slider / Stepper ----
+        "TextArea" => {
+            let mut kids: Vec<String> = Vec::new();
+            if !label.is_empty() {
+                kids.push(node_js_str("div", "", "color:#fff;font-size:1.1rem;margin-bottom:0.8rem;", label, &[]));
+            }
+            kids.push(node_js_str(
+                "textarea",
+                "",
+                "width:100%;box-sizing:border-box;padding:10px 12px;background:#1e1e1f;color:#fff;border:2px solid #3a7bd5;border-radius:4px;min-height:6rem;",
+                "",
+                &[],
+            ));
+            node_js_str("div", "", "display:flex;flex-direction:column;background:#1e1e1f;padding:0 2rem;box-sizing:border-box;", "", &kids)
+        }
+        "Slider" => {
+            let mut kids: Vec<String> = Vec::new();
+            kids.push(node_js_str(
+                "div",
+                "",
+                "flex:1;height:0.8rem;position:relative;border:1px solid rgba(255,255,255,0.3);border-radius:4px;background:rgba(255,255,255,0.08);box-sizing:border-box;",
+                "",
+                &[],
+            ));
+            kids.push(node_js_str(
+                "div",
+                "",
+                "flex:0 0 auto;width:1.6rem;height:1.6rem;box-sizing:border-box;border:1px solid rgba(255,255,255,0.4);border-radius:4px;background:rgba(255,255,255,0.15);",
+                "",
+                &[],
+            ));
+            if !value.is_empty() {
+                kids.push(node_js_str("div", "", "color:#fff;min-width:2rem;text-align:right;font-size:0.9rem;", value, &[]));
+            }
+            node_js_str("div", "", "display:flex;align-items:center;gap:0.8rem;", "", &kids)
+        }
+        "Stepper" => {
+            let minus = node_js_str("div", "", "padding:0.4rem 0.8rem;cursor:pointer;border:1px solid rgba(255,255,255,0.3);border-radius:4px;color:#fff;box-sizing:border-box;", "-", &[]);
+            let val = node_js_str("div", "", "color:#fff;min-width:2.4rem;text-align:center;", if value.is_empty() { "0" } else { value }, &[]);
+            let plus = node_js_str("div", "", "padding:0.4rem 0.8rem;cursor:pointer;border:1px solid rgba(255,255,255,0.3);border-radius:4px;color:#fff;box-sizing:border-box;", "+", &[]);
+            node_js_str("div", "", "display:flex;align-items:center;gap:0.4rem;", "", &[minus, val, plus])
+        }
+        // ---- D 数据：Icon / Image / Badge ----
+        "Icon" => {
+            node_js_str("div", "", "width:1.4rem;height:1.4rem;display:flex;align-items:center;justify-content:center;color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:3px;box-sizing:border-box;", "◆", &[])
+        }
+        "Image" => {
+            let s = if !src.is_empty() { src } else if !icon.is_empty() { icon } else { "" };
+            if s.is_empty() {
+                node_js_str("div", "", "color:#999;", "（无图源）", &[])
+            } else {
+                let json_src = serde_json::to_string(s).unwrap_or_else(|_| "\"\"".into());
+                node_js_str("img", &format!("[[\"src\",{json_src}]]"), "", "", &[])
+            }
+        }
+        "Badge" => {
+            node_js_str("div", "", "border-radius:8px;background:rgba(255,60,60,0.7);padding:0.2rem 0.6rem;color:#fff;font-size:0.8rem;display:inline-flex;box-sizing:border-box;", label, children)
+        }
         _ => {
             let text = if label.is_empty() { kind } else { label };
             node_js_str("div", "", "color:#fff;", text, children)
@@ -659,6 +864,10 @@ fn build_node_js(fb: &str, var: &str, seen: &mut Vec<String>) -> Option<String> 
     let columns = var_field(fb, var, "columns")
         .and_then(|c| c.trim().parse::<u32>().ok())
         .unwrap_or(1);
+    let icon = var_field(fb, var, "icon").unwrap_or_default();
+    let src = var_field(fb, var, "src").unwrap_or_default();
+    let value = var_field(fb, var, "value").unwrap_or_default();
+    let state = var_field(fb, var, "state").unwrap_or_default();
     let mut children: Vec<String> = Vec::new();
     if let Some(cv) = var_field(fb, var, "children") {
         for r in extract_children_refs(&cv) {
@@ -667,7 +876,10 @@ fn build_node_js(fb: &str, var: &str, seen: &mut Vec<String>) -> Option<String> 
             }
         }
     }
-    Some(kind_to_node_js(&kind, &label, &variant, &style, &orientation, columns, &children))
+    Some(kind_to_node_js(
+        &kind, &label, &variant, &style, &orientation, columns,
+        &icon, &src, &value, &state, &children,
+    ))
 }
 
 /// 组件组合树 → 根节点 JS 数组。
@@ -788,6 +1000,80 @@ fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// 从源文本中提取外部 page-script 资产文件名（.js）。
+///
+/// 示例组件用 `loadPageScriptAsset(modDir, "ex03_page_script.js")` 在运行时从
+/// <mod>/scripts/<filename> 加载页面脚本，而非把内容内联为 raw string。扫描器读不到
+/// 该文件内容，便在 page_script 字段留下一个残 token（见 scan_file）。这里优先在该
+/// 调用内取引号文件名，兜底取任意 `"*.js"` 字面量。
+fn extract_js_asset_fname(content: &str) -> Option<String> {
+    const NEEDLE: &str = "loadPageScriptAsset";
+    let mut search = 0;
+    while let Some(pos) = content[search..].find(NEEDLE) {
+        let start = search + pos;
+        let after = &content[start + NEEDLE.len()..];
+        if let Some(qi) = after.find('"') {
+            let rest = &after[qi + 1..];
+            if let Some(ei) = rest.find('"') {
+                let name = &rest[..ei];
+                if name.ends_with(".js") {
+                    return Some(name.to_string());
+                }
+            }
+        }
+        search = start + NEEDLE.len();
+    }
+    // 兜底：任意以 .js 结尾的引号字面量。
+    let mut i = 0;
+    let b = content.as_bytes();
+    while i < b.len() {
+        if b[i] == b'"' {
+            if let Some(e) = content[i + 1..].find('"') {
+                let cand = &content[i + 1..i + 1 + e];
+                if cand.ends_with(".js") {
+                    return Some(cand.to_string());
+                }
+                i += 1 + e;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// 在 mod 目录下定位并读取外部 page-script 资产内容（与 PageScriptAsset.h 的
+/// `<mod>/scripts/<filename>` 加载约定对齐；附加源码位与构建产物位作回退）。
+fn resolve_page_script_asset(dir: &Path, fname: &str) -> Option<String> {
+    const SEARCH: [&str; 4] = ["assets/scripts", "scripts", "bin/my-mod/scripts", "src/assets/scripts"];
+    for sub in SEARCH {
+        let p = dir.join(sub).join(fname);
+        if p.is_file() {
+            if let Ok(c) = fs::read_to_string(&p) {
+                return Some(c);
+            }
+        }
+    }
+    None
+}
+
+/// 判断该 page_script 是否仍是未解析的外部资产占位（简单标识符 token）。
+/// 只有 inline raw string 才能解析成多字符 JS；外部资产读不到时残留 `pageScript` 之类
+/// 的标识符。空串（无脚本）返回 false。
+fn is_external_script_placeholder(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    // 已命中的 inline raw string 内容是真实 JS（含换行/空白/函数/关键字），直接排除。
+    // 占位 token 有两种形态：
+    //   1) 简单标识符：`.text = pageScript`
+    //   2) 引用表达式：`.text = std::move(pageScript)`
+    if is_simple_ident(s) {
+        return true;
+    }
+    s.contains("std::move(") || s.contains("move(")
+}
+
 /// 扫描模组目录，产出可预览的 UI 资产。
 #[tauri::command]
 pub fn scan_mod_ui(dir: String) -> Result<ModScanResult, String> {
@@ -803,7 +1089,22 @@ pub fn scan_mod_ui(dir: String) -> Result<ModScanResult, String> {
         let Ok(content) = fs::read_to_string(&file) else {
             continue;
         };
-        let t = scan_file(&content, &mut warnings);
+        let mut t = scan_file(&content, &mut warnings);
+        // 外部 page-script：scan_file 只能解析 inline raw string，外部资产留下的
+        // 简单标识符 token 在这里补解析，从 mod 目录资产加载真实 JS 内容。
+        for tg in &mut t {
+            if is_external_script_placeholder(&tg.page_script) {
+                if let Some(fname) = extract_js_asset_fname(&content) {
+                    match resolve_page_script_asset(&root, &fname) {
+                        Some(src) => tg.page_script = src,
+                        None => warnings.push(format!(
+                            "page-script 资产未找到：{fname}（{} 引用）；预览无页面逻辑",
+                            file.display()
+                        )),
+                    }
+                }
+            }
+        }
         if !t.is_empty() {
             scanned.push(file.display().to_string());
             targets.extend(t);
@@ -871,6 +1172,26 @@ mod tests {
         assert_eq!(f.id, "calendar_grid");
         assert_eq!(f.fingerprint, "v1");
         assert_eq!(f.label, "Calendar");
+    }
+
+    #[test]
+    fn all_component_kinds_render_distinct() {
+        // 设计文档定义的全部 ComponentKind。每类都应输出专属结构，不得落入
+        // 默认分支的裸文本节点 {"t":"div","s":"color:#fff;","x":...}。
+        let kinds = [
+            "Text", "Panel", "Card", "Button", "ListItem", "Input", "TabBar", "Divider",
+            "Tooltip", "ContainerSlot", "KeyIcon", "Bubble", "FilterBar", "Progress",
+            "Stack", "Grid", "ScrollView", "Section", "Spacer", "Modal", "Menu",
+            "ScrollingList", "Dropdown", "Form", "NavigationBar", "Toast", "SearchField",
+            "Toggle", "Breadcrumb", "Pager", "TextArea", "Slider", "Stepper", "Picker",
+            "Icon", "Image", "Badge",
+        ];
+        let default = r#"{"t":"div","s":"color:#fff;","x":"demo"}"#;
+        for k in kinds {
+            let out = kind_to_node_js(k, "demo", "", "", "", 3, "icon", "x.png", "2", "default", &[]);
+            assert!(!out.starts_with(default), "kind {k} fell back to default node: {out}");
+            assert!(out.contains("\"t\":") && out.contains("\"s\":"), "kind {k} malformed: {out}");
+        }
     }
 
     #[test]
