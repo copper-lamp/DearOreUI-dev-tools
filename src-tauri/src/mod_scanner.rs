@@ -788,6 +788,80 @@ fn collect_source_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// 从源文本中提取外部 page-script 资产文件名（.js）。
+///
+/// 示例组件用 `loadPageScriptAsset(modDir, "ex03_page_script.js")` 在运行时从
+/// <mod>/scripts/<filename> 加载页面脚本，而非把内容内联为 raw string。扫描器读不到
+/// 该文件内容，便在 page_script 字段留下一个残 token（见 scan_file）。这里优先在该
+/// 调用内取引号文件名，兜底取任意 `"*.js"` 字面量。
+fn extract_js_asset_fname(content: &str) -> Option<String> {
+    const NEEDLE: &str = "loadPageScriptAsset";
+    let mut search = 0;
+    while let Some(pos) = content[search..].find(NEEDLE) {
+        let start = search + pos;
+        let after = &content[start + NEEDLE.len()..];
+        if let Some(qi) = after.find('"') {
+            let rest = &after[qi + 1..];
+            if let Some(ei) = rest.find('"') {
+                let name = &rest[..ei];
+                if name.ends_with(".js") {
+                    return Some(name.to_string());
+                }
+            }
+        }
+        search = start + NEEDLE.len();
+    }
+    // 兜底：任意以 .js 结尾的引号字面量。
+    let mut i = 0;
+    let b = content.as_bytes();
+    while i < b.len() {
+        if b[i] == b'"' {
+            if let Some(e) = content[i + 1..].find('"') {
+                let cand = &content[i + 1..i + 1 + e];
+                if cand.ends_with(".js") {
+                    return Some(cand.to_string());
+                }
+                i += 1 + e;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+/// 在 mod 目录下定位并读取外部 page-script 资产内容（与 PageScriptAsset.h 的
+/// `<mod>/scripts/<filename>` 加载约定对齐；附加源码位与构建产物位作回退）。
+fn resolve_page_script_asset(dir: &Path, fname: &str) -> Option<String> {
+    const SEARCH: [&str; 4] = ["assets/scripts", "scripts", "bin/my-mod/scripts", "src/assets/scripts"];
+    for sub in SEARCH {
+        let p = dir.join(sub).join(fname);
+        if p.is_file() {
+            if let Ok(c) = fs::read_to_string(&p) {
+                return Some(c);
+            }
+        }
+    }
+    None
+}
+
+/// 判断该 page_script 是否仍是未解析的外部资产占位（简单标识符 token）。
+/// 只有 inline raw string 才能解析成多字符 JS；外部资产读不到时残留 `pageScript` 之类
+/// 的标识符。空串（无脚本）返回 false。
+fn is_external_script_placeholder(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    // 已命中的 inline raw string 内容是真实 JS（含换行/空白/函数/关键字），直接排除。
+    // 占位 token 有两种形态：
+    //   1) 简单标识符：`.text = pageScript`
+    //   2) 引用表达式：`.text = std::move(pageScript)`
+    if is_simple_ident(s) {
+        return true;
+    }
+    s.contains("std::move(") || s.contains("move(")
+}
+
 /// 扫描模组目录，产出可预览的 UI 资产。
 #[tauri::command]
 pub fn scan_mod_ui(dir: String) -> Result<ModScanResult, String> {
@@ -803,7 +877,22 @@ pub fn scan_mod_ui(dir: String) -> Result<ModScanResult, String> {
         let Ok(content) = fs::read_to_string(&file) else {
             continue;
         };
-        let t = scan_file(&content, &mut warnings);
+        let mut t = scan_file(&content, &mut warnings);
+        // 外部 page-script：scan_file 只能解析 inline raw string，外部资产留下的
+        // 简单标识符 token 在这里补解析，从 mod 目录资产加载真实 JS 内容。
+        for tg in &mut t {
+            if is_external_script_placeholder(&tg.page_script) {
+                if let Some(fname) = extract_js_asset_fname(&content) {
+                    match resolve_page_script_asset(&root, &fname) {
+                        Some(src) => tg.page_script = src,
+                        None => warnings.push(format!(
+                            "page-script 资产未找到：{fname}（{} 引用）；预览无页面逻辑",
+                            file.display()
+                        )),
+                    }
+                }
+            }
+        }
         if !t.is_empty() {
             scanned.push(file.display().to_string());
             targets.extend(t);
