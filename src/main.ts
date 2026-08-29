@@ -4,7 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, ask } from "@tauri-apps/plugin-dialog";
 import { createCanvasView, type CanvasViewHandle } from "./preview/CanvasView";
 import { createResourcePanel, type ResourcePanelHandle } from "./preview/ResourcePanel";
 import { installYogaEngine } from "./preview/YogaEngine";
@@ -314,6 +314,48 @@ $<HTMLDivElement>("#menu-toggle-logs").addEventListener("click", () => {
 });
 $<HTMLSpanElement>("#log-drawer-close").addEventListener("click", () => {
     logDrawer.classList.remove("open");
+});
+
+// 帮助 > 检查更新
+// 语义化版本比较：按 "." 分段数值比较，缺失段视为 0（0.1.0 < 0.2.0 < 0.10.0）。
+function compareVersions(a: string, b: string): number {
+    const pa = a.split(".").map((x) => parseInt(x, 10) || 0);
+    const pb = b.split(".").map((x) => parseInt(x, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+        if (d !== 0) return d;
+    }
+    return 0;
+}
+
+$<HTMLDivElement>("#menu-check-update").addEventListener("click", async () => {
+    showToast("正在检查更新…", "info");
+    try {
+        const current = await invoke<string>("current_app_version");
+        const resp = await fetch(
+            "https://api.github.com/repos/copper-lamp/DearOreUI-dev-tools/releases/latest"
+        );
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const rel = (await resp.json()) as { tag_name?: string; html_url?: string };
+        const latest = (rel.tag_name ?? "").replace(/^v/, "");
+        if (!latest) throw new Error("无法解析最新版本");
+        if (compareVersions(latest, current) > 0) {
+            const go = await ask(`发现新版本 v${latest}，是否前往下载？`, {
+                title: "检查更新",
+                kind: "info",
+                okLabel: "前往下载",
+                cancelLabel: "取消",
+            });
+            if (go && rel.html_url) await invoke("open_external", { url: rel.html_url });
+        } else {
+            showToast(`已是最新版本 (v${current})`, "ok");
+        }
+    } catch (err) {
+        showToast(
+            `检查更新失败：${err instanceof Error ? err.message : String(err)}`,
+            "error"
+        );
+    }
 });
 
 // ---------------------------------------------------------------------------

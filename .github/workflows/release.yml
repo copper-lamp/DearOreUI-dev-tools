@@ -42,6 +42,29 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      # 以发布 tag 为唯一权威版本来源，构建前同步写回 package.json / tauri.conf.json / Cargo.toml，
+      # 确保产物版本与当前 Release tag 一致，而非恒为 0.1.0。
+      - name: Sync version from release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          node -e '
+            const fs=require("fs");
+            const tag=process.env.RELEASE_TAG||"";
+            const ver=tag.replace(/^v/,"");
+            if(!/^\d+\.\d+\.\d+$/.test(ver)){console.error("bad tag: "+tag);process.exit(1)}
+            for(const f of ["package.json","src-tauri/tauri.conf.json"]){
+              const c=JSON.parse(fs.readFileSync(f,"utf8"));
+              c.version=ver;
+              fs.writeFileSync(f,JSON.stringify(c,null,4)+"\n");
+            }
+            const toml="src-tauri/Cargo.toml";
+            const t=fs.readFileSync(toml,"utf8");
+            fs.writeFileSync(toml,t.replace(/(^version\s*=\s*)\"[^\"]*\"/m,"$1\""+ver+"\""));
+            console.log("version synced: "+ver);
+          '
+
       # beforeBuildCommand 由 tauri.conf.json 提供（npm run build），此处只触发打包
       - name: Build win64 installers
         run: npm run tauri build -- --target x86_64-pc-windows-msvc

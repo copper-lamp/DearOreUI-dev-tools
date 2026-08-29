@@ -1,7 +1,7 @@
 {
     "name": "oreui-designer",
     "private": true,
-    "version": "0.1.0",
+    "version": "0.0.3",
     "description": "DearOreUI visual designer - design OreUI interfaces with drag-and-drop",
     "type": "module",
     "scripts": {
