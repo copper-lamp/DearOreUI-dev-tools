@@ -1,38 +1,88 @@
-# DearOreUI 设计器
+<div align="center">
+  <h1>DearOreUI Designer</h1>
+  <p><strong>Design and preview Minecraft Bedrock OreUI — without launching the game.</strong></p>
+  <p>An offline visual designer (Tauri 2) for mods built on the <a href="https://github.com/copper-lamp/Dear-OreUI">DearOreUI</a> runtime.</p>
 
-基于 **Tauri + Vite** 的离线可视化设计工具，用于预览和调试 **DearOreUI** 模组声明的 OreUI 界面。
+  <p>
+    <a href="https://github.com/copper-lamp/DearOreUI-dev-tools/releases">Downloads</a>
+    ·
+    <a href="https://github.com/copper-lamp/Dear-OreUI">Core runtime</a>
+    ·
+    <a href="https://copper-lamp.github.io/dearoreui-docs/">Documentation</a>
+    ·
+    <a href="https://github.com/magicobs0z/dearoreui-ExampleMod">Example mod</a>
+    ·
+    <a href="README_ZH.md">简体中文</a>
+  </p>
 
-![运行时界面](https://pic1.imgdb.cn/i/034FvxQTpHSYa9thEHE3Lj.png)
+  <p>
+    <a href="https://github.com/copper-lamp/DearOreUI-dev-tools/releases"><img src="https://img.shields.io/github/v/release/copper-lamp/DearOreUI-dev-tools?style=for-the-badge&amp;label=release" alt="latest release"></a>
+    <a href="https://github.com/copper-lamp/DearOreUI-dev-tools/releases"><img src="https://img.shields.io/github/downloads/copper-lamp/DearOreUI-dev-tools/total?style=for-the-badge" alt="downloads"></a>
+    <a href="https://github.com/copper-lamp/Dear-OreUI/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-CC0--1.0-2f6f9f?style=for-the-badge" alt="CC0-1.0 license"></a>
+  </p>
+</div>
 
-## 核心能力
+![runtime](public/runtime.png)
 
-- **模组 UI 自动识别（源码扫描）**：选择模组源码目录后，扫描 `registerComponent` 注册，自动识别其中的 UI 页面（含 `DomNode` body 与 `ComponentSpec` 组合树），**模组无需任何改动**。
-- **离线预览**：不运行游戏即可在画布上渲染识别到的 UI；支持导入原版 `data/gui/dist/hbui` 资源做本地贴图预览（计划中）。
-- **双加载模型**：独立模组入口、以及"原版屏幕 + 模组覆盖层"组合预览。
-- **侧边标签页**：只展示模组改动/识别出的页面。
+## What is it?
 
-## 运行
+DearOreUI Designer lets mod authors **see their UI without running Minecraft**. Point it at a mod's source tree, and it statically scans the code to recover the OreUI pages the mod declares — no mod-side changes required — then renders them on an in-app canvas that approximates the OreUI (Coherent Gameface) layout engine.
 
-获取最新发布的安装包 [下载链接](https://github.com/copper-lamp/DearOreUI-dev-tools/releases)
-安装应用后，启动桌面应用即可使用
+| | |
+| --- | --- |
+| **Target users** | Authors of [DearOreUI](https://github.com/copper-lamp/Dear-OreUI) client mods |
+| **Position** | Offline preview & debugging companion to the DearOreUI runtime |
+| **Workflow** | Open mod directory → auto-detect pages → click to preview → refresh on save |
 
-## 使用
+## Core capabilities
 
-1. 启动桌面应用。
-2. 顶部菜单 **项目 → 打开模组目录**，选择目标模组源码目录（例如 `dearoreui-ExampleMod`）。
-3. 左侧标签页列出自动识别出的 UI，点击即可在画布预览。
-4. 通过 **项目 → 导入原版资源** 可导入原版 UI 资源用于更贴近真机的显示。（计划中）
+- **Mod UI auto-detection (source scan).** Reads `registerComponent` calls from C++ source, recovering `DomNode` bodies and `ComponentSpec` trees. **The mod needs no modification.**
+- **Offline preview.** Render detected UI on a canvas without a game client; a Yoga-based layout pass mimics the OreUI box model.
+- **Dual-loading model.** Preview both standalone mod entries and the "vanilla screen + mod overlay" combination.
+- **Sidebar tabs.** Only pages the mod actually changes/declares are shown; untouched screens stay hidden.
+- **Vanilla resource import (planned).** Import `data/gui/dist/hbui` assets for pixel-accurate 9-slice textures.
 
-## 技术栈
+## Install
 
-| 层     | 技术                                                                     |
-| ----- | ---------------------------------------------------------------------- |
-| 桌面宿主  | Tauri 2                                                                |
-| 前端    | Vite + TypeScript                                                      |
-| UI 渲染 | OracleUI (Coherent Gameface) 近似渲染，复用核心层 `stage7` 脚本与节点格式 `{t,s,x,a,c}` |
-| 扫描    | `src-tauri/src/mod_scanner.rs`（静态分析 C++ 源码，纯只读）                        |
+Download the latest installer from [Releases](https://github.com/copper-lamp/DearOreUI-dev-tools/releases), install, and launch.
 
-## 相关仓库
+## Usage
 
-- 核心运行时：[DearOreUI](https://github.com/copper-lamp/Dear-OreUI)
-- 示例模组：[dearoreui-ExampleMod](https://github.com/magicobs0z/dearoreui-ExampleMod)
+1. Launch the desktop app.
+2. **Project → Open mod directory**, select a mod source tree (e.g. `dearoreui-ExampleMod`).
+3. Auto-detected pages appear as sidebar tabs; click one to preview on the canvas.
+4. **Project → Import vanilla resources** to load original UI assets for closer-to-device rendering (planned).
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Desktop host | Tauri 2 |
+| UI | Vite + TypeScript |
+| Rendering | Yoga layout pass approximating OreUI (Coherent Gameface); reuses the runtime's `stage7` scripts and `{t,s,x,a,c}` node format |
+| Scanner | `src-tauri/src/mod_scanner.rs` — static, read-only C++ source analysis |
+
+## Development
+
+```powershell
+npm install        # install dependencies
+npm run tauri dev  # start the desktop app in dev mode
+```
+
+The Rust scanner lives in `src-tauri/src/`; the rendering frontend in `src/`. Build releases with `npm run tauri build` (see `.github/workflows/release.yml`).
+
+## Ecosystem
+
+This is one part of the DearOreUI toolchain:
+
+| Project | Repository | Role |
+| --- | --- | --- |
+| **DearOreUI** | [copper-lamp/Dear-OreUI](https://github.com/copper-lamp/Dear-OreUI) | Native LeviLamina runtime — extends OreUI at runtime |
+| **DearOreUI Designer** | [copper-lamp/DearOreUI-dev-tools](https://github.com/copper-lamp/DearOreUI-dev-tools) | This repo — offline visual preview |
+| **DearOreUI Docs** | [copper-lamp/dearoreui-docs](https://github.com/copper-lamp/dearoreui-docs) | Official documentation & learning site |
+| **dearoreui-ExampleMod** | [magicobs0z/dearoreui-ExampleMod](https://github.com/magicobs0z/dearoreui-ExampleMod) | Progressive tutorial mod |
+| **dearoreui-repo** | [copper-lamp/dearoreui-repo](https://github.com/copper-lamp/dearoreui-repo) | Self-hosted xmake package repo |
+
+## License
+
+[CC0-1.0](https://github.com/copper-lamp/Dear-OreUI/blob/main/LICENSE), matching the DearOreUI runtime.
