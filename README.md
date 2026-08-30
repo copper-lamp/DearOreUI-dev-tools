@@ -2,7 +2,7 @@
 
 基于 **Tauri + Vite** 的离线可视化设计工具，用于预览和调试 **DearOreUI** 模组声明的 OreUI 界面。
 
-![运行时界面](./public/runtime.png)
+![运行时界面](https://pic1.imgdb.cn/i/034FvxQTpHSYa9thEHE3Lj.png)
 
 ## 核心能力
 
